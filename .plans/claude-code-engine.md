@@ -108,12 +108,37 @@ re-passed** every turn. The new user message is fed via **stdin**.
 These prevent hung/incorrect turns and ship in the first cut:
 
 - **`--permission-mode`** — without it, `claude -p` blocks forever on an interactive
-  approval prompt. Posture decided explicitly (mirror OpenClaw's config-gated
-  `bypassPermissions`).
+  approval prompt. **Default: `bypassPermissions`.** See "Permission posture" below.
 - **No-output watchdog** + overall turn deadline; classify `no-output-timeout` /
   `overall-timeout` / non-zero-exit from stderr.
 - **Interrupt** — wire Hermes' `interrupt()` to kill the subprocess / close stdin.
 - **Session-keyed serialization** — concurrent `--resume <same-id>` must not interleave.
+
+### Permission posture
+
+The `<posture>` in the argv resolves to a `claude --permission-mode` value. **Default:
+`bypassPermissions`** — the only mode that reliably completes a headless `claude -p`
+turn, since any prompt-requiring mode would hang waiting on stdin that never comes.
+Constraint then comes from `--allowedTools mcp__hermes__*` + `--strict-mcp-config` +
+Hermes' own tool guardrails, not per-call approval.
+
+Resolution precedence (first match wins), mirroring how `codex_app_server` derives its
+permission profile from `tools.terminal.security_mode`:
+
+1. **CLI flag** `--claude-permission-mode <value>` (one-off override).
+2. **Env var** `HERMES_CLAUDE_PERMISSION_MODE`.
+3. **Config** `tools.terminal.security_mode` → mapped via
+   `_HERMES_TO_CLAUDE_PERMISSION_MODE`:
+   - `unrestricted` / `yolo` / `auto` → `bypassPermissions`
+   - `approval-required` → `plan` (read-only; Claude analyzes but does not execute)
+   - unset / unknown → `bypassPermissions` (**the default**)
+4. Fallback → `bypassPermissions`.
+
+Accepted values: `bypassPermissions`, `acceptEdits`, `plan`, `default`. **Caveat:**
+`default` and `acceptEdits` can still hang on a prompt in headless mode, so only
+`bypassPermissions` (run) and `plan` (read-only) are fully supported in the first cut.
+True per-call approval (mapping `approval-required` to an interactive gate) requires
+MCP-side approval handling — deferred, matching OpenClaw's loopback approval model.
 
 ### Stream parsing
 
