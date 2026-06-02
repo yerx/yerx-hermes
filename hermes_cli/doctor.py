@@ -306,6 +306,24 @@ def _check_s6_supervision(issues: list[str]) -> None:
     )
 
 
+def check_claude_cli_available() -> "Optional[str]":
+    """Return an error string when the claude binary is not on PATH, else None.
+
+    Called by the doctor probe when the active provider is ``claude-cli``
+    (api_mode ``claude_code_cli``) to confirm the Claude Code CLI is
+    installed. Mirrors the precedent in ``agent/anthropic_adapter.py``
+    where ``shutil.which("claude")`` is used to gate the spawn path.
+    """
+    from typing import Optional as _Optional  # noqa: F401 — for return annotation
+    if _safe_which("claude") is None:
+        return (
+            "The 'claude' binary is not on PATH. "
+            "Install Claude Code with: npm install -g @anthropic-ai/claude-code  "
+            "then run 'claude' to log in."
+        )
+    return None
+
+
 def _check_gateway_service_linger(issues: list[str]) -> None:
     """Warn when a systemd user gateway service will stop after logout.
 
@@ -1002,6 +1020,32 @@ def run_doctor(args):
             check_warn("xAI OAuth", "(not logged in)")
             if xai_oauth_status.get("error"):
                 check_info(xai_oauth_status["error"])
+    except Exception:
+        pass
+
+    # Claude Code CLI probe — only relevant when the active provider is
+    # claude-cli (api_mode=claude_code_cli). Check that the 'claude' binary
+    # is installed so users get a clear error instead of a cryptic spawn
+    # failure on the first turn.
+    try:
+        import yaml as _yaml_cc
+        _cc_cfg_path = HERMES_HOME / "config.yaml"
+        _cc_is_active = False
+        if _cc_cfg_path.exists():
+            _cc_raw = _yaml_cc.safe_load(_cc_cfg_path.read_text(encoding="utf-8")) or {}
+            _cc_model = _cc_raw.get("model") if isinstance(_cc_raw, dict) else {}
+            if isinstance(_cc_model, dict):
+                _cc_provider = str(_cc_model.get("provider") or "").strip().lower()
+                _cc_api_mode = str(_cc_model.get("api_mode") or "").strip().lower()
+                _cc_is_active = _cc_provider == "claude-cli" or _cc_api_mode == "claude_code_cli"
+        if _cc_is_active:
+            _cc_err = check_claude_cli_available()
+            if _cc_err is None:
+                check_ok("Claude Code CLI (claude binary)", "(found)")
+            else:
+                check_fail("Claude Code CLI (claude binary)", "(not found)")
+                check_info(_cc_err)
+                issues.append(_cc_err)
     except Exception:
         pass
 

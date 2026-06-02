@@ -373,14 +373,19 @@ def _run_review_in_thread(
             _parent_api_mode = _parent_runtime.get("api_mode") or None
             # The review fork needs to call agent-loop tools (memory,
             # skill_manage). Those tools require Hermes' own dispatch,
-            # which the codex_app_server runtime bypasses entirely
-            # (it runs the turn inside codex's subprocess). So when
-            # the parent is on codex_app_server, downgrade the review
-            # fork to codex_responses — same auth/credentials, but
-            # talks to the OpenAI Responses API directly so Hermes
-            # owns the loop and the agent-loop tools dispatch.
+            # which the codex_app_server and claude_code_cli runtimes
+            # bypass entirely (each hands the turn to an external
+            # subprocess). Downgrade the review fork to the
+            # equivalent Hermes-owned API mode so it can run the
+            # agent-loop tools directly:
+            #   codex_app_server  → codex_responses (OpenAI Responses API)
+            #   claude_code_cli   → anthropic_messages (Anthropic Messages API)
+            # Both use the same auth/credentials as the parent; only
+            # the execution path changes so Hermes owns the loop.
             if _parent_api_mode == "codex_app_server":
                 _parent_api_mode = "codex_responses"
+            elif _parent_api_mode == "claude_code_cli":
+                _parent_api_mode = "anthropic_messages"
             # skip_memory=True keeps the review fork from
             # touching external memory plugins (honcho, mem0,
             # supermemory, etc.).  Without it, the fork's

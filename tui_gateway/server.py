@@ -4048,7 +4048,7 @@ def _run_prompt_submit(rid, sid: str, session: dict, text: Any) -> None:
                         _read_main_model(),
                         _cfg,
                     )
-                    if getattr(agent, "api_mode", "") == "codex_app_server":
+                    if getattr(agent, "api_mode", "") in {"codex_app_server", "claude_code_cli"}:
                         _mode = "text"
                 except Exception as _img_exc:
                     print(
