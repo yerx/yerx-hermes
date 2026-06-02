@@ -2,16 +2,20 @@
 
 A distinct provider (not an openai_runtime sub-mode): auth is the local
 `claude` login, the catalog is static, and no HTTP health probe applies.
+
+Named ``claude-cli`` rather than ``claude-code`` because ``claude-code`` is
+already wired throughout the codebase as a synonym for the ``anthropic``
+provider (auth, models, web_server, providers, auxiliary_client, and the
+anthropic plugin alias). Reusing that name would clobber those paths.
 """
 
 from __future__ import annotations
 
-import providers as _providers_pkg
 from providers import register_provider
 from providers.base import ProviderProfile
 
 _profile = ProviderProfile(
-    name="claude-code",
+    name="claude-cli",
     api_mode="claude_code_cli",
     display_name="Claude Code (CLI engine)",
     description="Runs the local `claude` CLI as the reasoning engine.",
@@ -27,10 +31,3 @@ _profile = ProviderProfile(
 )
 
 register_provider(_profile)
-
-# The anthropic plugin registers "claude-code" as an alias pointing to
-# "anthropic".  Since legacy providers/*.py modules are imported AFTER
-# bundled plugins, that alias is already in _ALIASES when we get here.
-# Override it so get_provider_profile("claude-code") resolves to this
-# distinct profile rather than the anthropic one.
-_providers_pkg._ALIASES["claude-code"] = "claude-code"
