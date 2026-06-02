@@ -4632,15 +4632,15 @@ class AIAgent:
             should_review_memory=should_review_memory,
         )
 
-    def _claude_make_session(self):
+    def _claude_make_session(self, task_id=None):
         from agent.transports.claude_code_session import ClaudeCodeSession
         return ClaudeCodeSession(
             cwd=getattr(self, "session_cwd", None) or os.getcwd(),
-            context_env=self._claude_turn_context(),
+            context_env=self._claude_turn_context(task_id=task_id),
             model=self.model,
         )
 
-    def _claude_turn_context(self) -> dict:
+    def _claude_turn_context(self, task_id=None) -> dict:
         """Per-turn HERMES_* context env injected into the spawned claude +
         MCP bridge (BL5)."""
         ctx: dict = {}
@@ -4653,6 +4653,10 @@ class AIAgent:
         sid = getattr(self, "session_id", None)
         if sid:
             ctx["HERMES_SESSION_ID"] = str(sid)
+        # BL5: thread the per-turn task id so MCP-bridged terminal/browser tools
+        # keep per-session isolation instead of falling back to task_id=None.
+        if task_id:
+            ctx["HERMES_TASK_ID"] = str(task_id)
         return ctx
 
     def _claude_build_system_prompt(self) -> str:

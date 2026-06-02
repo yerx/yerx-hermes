@@ -24,7 +24,7 @@ def run_claude_code_turn(
 ) -> Dict[str, Any]:
     # Lazy per-AIAgent session, reused across turns for --resume continuity.
     if getattr(agent, "_claude_session", None) is None:
-        agent._claude_session = agent._claude_make_session()
+        agent._claude_session = agent._claude_make_session(task_id=effective_task_id)
 
     system_prompt = agent._claude_build_system_prompt()
 

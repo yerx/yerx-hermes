@@ -24,7 +24,7 @@ def _fake_agent():
     a._sync_external_memory_for_turn = lambda **k: None
     a._spawn_background_review = lambda **k: None
     a._claude_build_system_prompt = lambda: "system"
-    a._claude_make_session = lambda: _FakeSession()
+    a._claude_make_session = lambda task_id=None: _FakeSession()
     a._claude_turn_context = {}
     return a
 

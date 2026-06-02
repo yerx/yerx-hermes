@@ -25,6 +25,7 @@ import ssl
 import threading
 import time
 import uuid
+from collections.abc import Mapping
 from typing import Any, Dict, List, Optional
 
 from agent.codex_responses_adapter import _summarize_user_message_for_log
@@ -348,6 +349,55 @@ def _get_continuation_prompt(is_partial_stub: bool, dropped_tools: Optional[List
         )
 
 
+def _claude_execution_context(agent) -> dict:
+    """Derive the trusted-context input for the claude_code_cli gate (BL6) from
+    the REAL signals an AIAgent carries, instead of the never-set
+    ``_execution_context``.
+
+    The claude_code_cli engine grants Claude its full native tool surface under
+    bypassPermissions, so it must only run for a trusted local operator. We
+    refuse two classes of turn:
+
+      * Delegated / subagent turns. A delegate_task child inherits its parent's
+        ``api_mode`` and carries ``_parent_session_id`` (agent_init.py:1031,
+        delegate_tool.py:1129) and ``_subagent_id`` (delegate_tool.py:1146).
+      * Channel / gateway / remote-driven turns. The gateway constructs the
+        agent with a ``_gateway_session_key`` (gateway/run.py:17562) and a
+        non-"cli" ``platform`` (e.g. telegram/discord/whatsapp). A genuine
+        local interactive CLI session uses ``platform="cli"`` with no gateway
+        key and no parent/subagent markers.
+
+    Conservative default: an attribute-less / plain-local agent yields an empty
+    context, which ``assert_trusted_context`` treats as trusted local use.
+
+    If an explicit ``agent._execution_context`` mapping is present it is merged
+    last so future callers can override the derived signals.
+    """
+    ctx: dict = {}
+
+    # --- Delegated / subagent detection ---
+    if getattr(agent, "_parent_session_id", None) or getattr(
+        agent, "_subagent_id", None
+    ):
+        ctx["delegated"] = True
+
+    # --- Channel / gateway / remote-trigger detection ---
+    # A non-"cli" platform marks a messaging-channel turn. None/"cli" is local.
+    platform = getattr(agent, "platform", None)
+    if platform and str(platform).strip().lower() not in ("", "cli"):
+        ctx["source"] = "channel"
+    # A gateway session key is only ever set on gateway-driven agents.
+    if getattr(agent, "_gateway_session_key", None):
+        ctx.setdefault("source", "gateway")
+
+    # --- Explicit override (merged last) ---
+    explicit = getattr(agent, "_execution_context", None)
+    if isinstance(explicit, Mapping):
+        ctx.update(explicit)
+
+    return ctx
+
+
 def _maybe_dispatch_cli_runtime(
     agent,
     *,
@@ -369,7 +419,7 @@ def _maybe_dispatch_cli_runtime(
         )
     if agent.api_mode == "claude_code_cli":
         from agent.transports.claude_code_spawn import assert_trusted_context
-        assert_trusted_context(getattr(agent, "_execution_context", None))
+        assert_trusted_context(_claude_execution_context(agent))
         return agent._run_claude_code_turn(
             user_message=user_message,
             original_user_message=original_user_message,
