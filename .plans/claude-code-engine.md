@@ -77,11 +77,13 @@ is fragile.
    `agent/agent_init.py:291`; add the dispatch early-return beside
    `agent/conversation_loop.py:787` → a 2-line forwarder to `agent/claude_runtime.py`
    (mirror `run_agent.py:4602`).
-5. **Selection & provider** — a **distinct `claude-code` provider** (own auth = `claude`
+5. **Selection & provider** — a **distinct `claude-cli` provider** (own auth = `claude`
    login, static catalog). NOT an `openai_runtime` sub-mode (that's codex-specific and
    reuses OpenAI auth). Selection sets `api_mode="claude_code_cli"`; add a
    `/claude-runtime`-style selector and special-case it in `background_review.py`
    alongside `codex_app_server` (it bypasses chat-completion message shapes).
+   Provider selection name is `claude-cli` (the name `claude-code` remains an alias for
+   the `anthropic` provider).
 
 ### `claude` invocation
 

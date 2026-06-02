@@ -25,7 +25,7 @@
 | `agent/agent_init.py:291` (MODIFY) | Add `"claude_code_cli"` to the valid api_mode set |
 | `agent/conversation_loop.py:787` (MODIFY) | Add dispatch early-return for `claude_code_cli` |
 | `run_agent.py:4602` (MODIFY) | Add `_run_claude_code_turn` forwarder |
-| `providers/claude_code.py` (NEW) | `claude-code` ProviderProfile (static catalog, no HTTP) |
+| `providers/claude_code.py` (NEW) | `claude-cli` ProviderProfile (static catalog, no HTTP) |
 | `agent/doctor.py` or doctor module (MODIFY) | `claude --version` / login probe |
 
 Conventions: every test file mirrors the module path under `tests/`. Use `python3.11 -m pytest`.
@@ -1538,7 +1538,7 @@ git commit -m "feat(claude-engine): wire api_mode + dispatch early-return + trus
 
 ---
 
-## Task 12: `claude-code` provider profile + selection (MA2)
+## Task 12: `claude-cli` provider profile + selection (MA2)
 
 **Files:**
 - Create: `providers/claude_code.py`
@@ -1546,7 +1546,7 @@ git commit -m "feat(claude-engine): wire api_mode + dispatch early-return + trus
 
 > Read `providers/base.py` (`ProviderProfile`) and `providers/__init__.py`
 > (`register_provider`, `_discover_providers`) first — match the existing
-> registration pattern exactly. claude-code is a DISTINCT provider (its own
+> registration pattern exactly. claude-cli is a DISTINCT provider (its own
 > `claude` login auth, static catalog), NOT an `openai_runtime` sub-mode.
 
 - [ ] **Step 1: Write the failing test**
@@ -1556,8 +1556,8 @@ git commit -m "feat(claude-engine): wire api_mode + dispatch early-return + trus
 from providers import get_provider_profile
 
 
-def test_claude_code_provider_registered():
-    p = get_provider_profile("claude-code")
+def test_claude_cli_provider_registered():
+    p = get_provider_profile("claude-cli")
     assert p is not None
     assert p.api_mode == "claude_code_cli"
     # No HTTP catalog probe — auth is the local `claude` login.
@@ -1568,7 +1568,7 @@ def test_claude_code_provider_registered():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `python3.11 -m pytest tests/providers/test_claude_code_provider.py -v`
-Expected: FAIL (`get_provider_profile("claude-code")` is None)
+Expected: FAIL (`get_provider_profile("claude-cli")` is None)
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -1586,7 +1586,7 @@ from providers import register_provider
 from providers.base import ProviderProfile
 
 register_provider(ProviderProfile(
-    name="claude-code",
+    name="claude-cli",
     api_mode="claude_code_cli",
     display_name="Claude Code (CLI engine)",
     description="Runs the local `claude` CLI as the reasoning engine.",
@@ -1613,7 +1613,7 @@ Expected: PASS
 
 ```bash
 git add providers/claude_code.py tests/providers/test_claude_code_provider.py
-git commit -m "feat(claude-engine): claude-code provider profile (distinct provider, MA2)"
+git commit -m "feat(claude-engine): claude-cli provider profile (distinct provider, MA2)"
 ```
 
 ---
@@ -1738,7 +1738,7 @@ Expected: PASS (no regressions in codex/runtime/provider paths)
 
 - [ ] **Step 3: Document selection in `cli-config.yaml.example`**
 
-Add a commented block showing how to select the engine (provider `claude-code` / `--api-mode claude_code_cli`), the `HERMES_CLAUDE_PERMISSION_MODE` override, and the prerequisite `claude` login. Mirror the style of the existing codex runtime block.
+Add a commented block showing how to select the engine (provider `claude-cli` / `--api-mode claude_code_cli`), the `HERMES_CLAUDE_PERMISSION_MODE` override, and the prerequisite `claude` login. Mirror the style of the existing codex runtime block.
 
 - [ ] **Step 4: Commit + push**
 

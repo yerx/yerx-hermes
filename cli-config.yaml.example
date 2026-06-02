@@ -31,6 +31,34 @@ model:
   #   "kilocode"     - KiloCode gateway (requires: KILOCODE_API_KEY)
   #   "azure-foundry" - Microsoft Foundry / Azure OpenAI (API key or Entra ID)
   #   "lmstudio"     - LM Studio local server (optional: LM_API_KEY, defaults to http://127.0.0.1:1234/v1)
+  #   "claude-cli"   - Claude Code CLI engine (see details below)
+  #
+  # ── Claude Code CLI engine (provider: "claude-cli") ──────────────────────────
+  #   Runs the local `claude` CLI binary as the inference engine instead of a
+  #   remote API.  Sets api_mode to "claude_code_cli" internally.
+  #
+  #   PREREQUISITES:
+  #     - Claude Code must be installed and you must be logged in.
+  #       Run `claude` once to complete authentication before using this engine.
+  #     - Auth is handled entirely by the CLI's own login; Hermes strips all
+  #       ANTHROPIC_* and CLAUDE_CODE_* env vars from the subprocess so they
+  #       don't interfere with the CLI's credential store.
+  #
+  #   PERMISSION POSTURE:
+  #     Defaults to "bypassPermissions" (trusted local operator).
+  #     Override via env:  HERMES_CLAUDE_PERMISSION_MODE=bypassPermissions|plan
+  #     Or via config:     tools.terminal.security_mode (same values).
+  #
+  #   SECURITY / TRUST:
+  #     Gated to trusted local-operator contexts only.  Requests arriving via
+  #     channel, gateway, or delegated-agent contexts are refused at spawn time.
+  #
+  #   TOOL BRIDGING:
+  #     Hermes' built-in tools are exposed to claude as an MCP server under the
+  #     namespace "mcp__hermes-tools__*".
+  #
+  # Note: the name "claude-code" remains an alias for the standard "anthropic"
+  # provider (direct API); use "claude-cli" to select this local CLI engine.
   #
   # Local servers (LM Studio, Ollama, vLLM, llama.cpp):
   #   "custom"       - Any other OpenAI-compatible endpoint. Set base_url below.
