@@ -1,0 +1,43 @@
+"""Spawn-time helpers for the claude_code_cli engine: trust gate, MCP config
+file generation, spawn-env construction, and argv building."""
+
+from __future__ import annotations
+
+import json
+import os
+import tempfile
+from typing import Any, Mapping, Optional, Sequence
+
+from agent.transports import claude_code_constants as c
+
+
+class UntrustedContextError(RuntimeError):
+    """Raised when the engine is invoked from an untrusted-carrying context.
+
+    BL6: the engine grants Claude its full native tool surface under
+    bypassPermissions; it is gated to trusted local-operator use only.
+    """
+
+
+# Context markers that indicate the turn may carry untrusted-derived input.
+_UNTRUSTED_SOURCES = {"channel", "gateway", "remote_trigger", "webhook", "cron"}
+
+
+def assert_trusted_context(context: Optional[Mapping[str, Any]]) -> None:
+    """Raise UntrustedContextError if the execution context is not a trusted
+    local operator. Conservative: an unknown/empty context is treated as
+    local-interactive (the engine is opt-in and only reachable when the user
+    selected it), but explicit untrusted markers refuse."""
+    if not context:
+        return
+    if context.get("delegated"):
+        raise UntrustedContextError(
+            "claude_code_cli engine refuses delegated (delegate_task) contexts"
+        )
+    source = str(context.get("source") or "").strip().lower()
+    if source in _UNTRUSTED_SOURCES:
+        raise UntrustedContextError(
+            f"claude_code_cli engine refuses untrusted context source={source!r}; "
+            "this engine is gated to trusted local-operator use (it grants "
+            "Claude unsandboxed native tools under bypassPermissions)."
+        )
