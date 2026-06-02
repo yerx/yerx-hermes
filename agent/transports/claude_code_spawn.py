@@ -65,3 +65,18 @@ def build_mcp_config_file(
     with os.fdopen(fd, "w") as fh:
         json.dump(payload, fh)
     return path
+
+
+def build_spawn_env(
+    *,
+    base: Optional[Mapping[str, str]] = None,
+    context_env: Optional[Mapping[str, str]] = None,
+) -> dict[str, str]:
+    """Copy the base environment, remove the enumerated auth denylist, then
+    overlay per-turn HERMES_* context. Never wildcard-clears (BL4)."""
+    env = dict(base if base is not None else os.environ)
+    for name in c.CLEAR_ENV:
+        env.pop(name, None)
+    if context_env:
+        env.update(context_env)
+    return env
