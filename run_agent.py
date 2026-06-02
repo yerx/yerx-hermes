@@ -4612,6 +4612,53 @@ class AIAgent:
         from agent.codex_runtime import run_codex_app_server_turn
         return run_codex_app_server_turn(self, user_message=user_message, original_user_message=original_user_message, messages=messages, effective_task_id=effective_task_id, should_review_memory=should_review_memory)
 
+    def _run_claude_code_turn(
+        self,
+        *,
+        user_message: str,
+        original_user_message: Any,
+        messages: List[Dict[str, Any]],
+        effective_task_id: str,
+        should_review_memory: bool = False,
+    ) -> Dict[str, Any]:
+        """Forwarder — see ``agent.claude_runtime.run_claude_code_turn``."""
+        from agent.claude_runtime import run_claude_code_turn
+        return run_claude_code_turn(
+            self,
+            user_message=user_message,
+            original_user_message=original_user_message,
+            messages=messages,
+            effective_task_id=effective_task_id,
+            should_review_memory=should_review_memory,
+        )
+
+    def _claude_make_session(self):
+        from agent.transports.claude_code_session import ClaudeCodeSession
+        return ClaudeCodeSession(
+            cwd=getattr(self, "session_cwd", None) or os.getcwd(),
+            context_env=self._claude_turn_context(),
+            model=self.model,
+        )
+
+    def _claude_turn_context(self) -> dict:
+        """Per-turn HERMES_* context env injected into the spawned claude +
+        MCP bridge (BL5)."""
+        ctx: dict = {}
+        enabled = getattr(self, "enabled_toolsets", None)
+        if enabled:
+            ctx["HERMES_ENABLED_TOOLSETS"] = ",".join(str(x) for x in enabled)
+        disabled = getattr(self, "disabled_toolsets", None)
+        if disabled:
+            ctx["HERMES_DISABLED_TOOLSETS"] = ",".join(str(x) for x in disabled)
+        sid = getattr(self, "session_id", None)
+        if sid:
+            ctx["HERMES_SESSION_ID"] = str(sid)
+        return ctx
+
+    def _claude_build_system_prompt(self) -> str:
+        """Reuse the agent's existing system-prompt assembly."""
+        return self._build_system_prompt() if hasattr(self, "_build_system_prompt") else ""
+
 def main(
     query: str = None,
     model: str = "",
