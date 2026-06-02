@@ -53,6 +53,29 @@ from typing import Any, Optional
 logger = logging.getLogger(__name__)
 
 
+# Bound to model_tools.handle_function_call when the server is built. Module
+# level so tests can monkeypatch it. (BL5)
+_handle_function_call_ref = None
+
+
+def _read_context_from_env() -> dict:
+    """Per-turn context the spawning engine injected as env (BL5).
+
+    Lets the stateless MCP bridge pass the session's enabled_toolsets (the
+    out-of-scope-tool security gate, model_tools.py:885), task_id, and
+    session_id into handle_function_call."""
+    def _split(name: str):
+        raw = os.environ.get(name) or ""
+        return [p for p in (s.strip() for s in raw.split(",")) if p] or None
+
+    return {
+        "enabled_toolsets": _split("HERMES_ENABLED_TOOLSETS"),
+        "disabled_toolsets": _split("HERMES_DISABLED_TOOLSETS"),
+        "task_id": os.environ.get("HERMES_TASK_ID") or None,
+        "session_id": os.environ.get("HERMES_SESSION_ID") or None,
+    }
+
+
 # Tools we expose. Each name MUST match a registered Hermes tool that
 # `model_tools.handle_function_call()` can dispatch.
 #
@@ -122,6 +145,9 @@ def _build_server() -> Any:
         handle_function_call,
     )
 
+    global _handle_function_call_ref
+    _handle_function_call_ref = handle_function_call
+
     mcp = FastMCP(
         "hermes-tools",
         instructions=(
@@ -162,7 +188,15 @@ def _build_server() -> Any:
         def _make_handler(tool_name: str):
             def _dispatch(**kwargs: Any) -> str:
                 try:
-                    return handle_function_call(tool_name, kwargs or {})
+                    ctx = _read_context_from_env()
+                    return _handle_function_call_ref(
+                        tool_name,
+                        kwargs or {},
+                        task_id=ctx["task_id"],
+                        session_id=ctx["session_id"],
+                        enabled_toolsets=ctx["enabled_toolsets"],
+                        disabled_toolsets=ctx["disabled_toolsets"],
+                    )
                 except Exception as exc:
                     logger.exception("tool %s raised", tool_name)
                     return json.dumps({"error": str(exc), "tool": tool_name})
