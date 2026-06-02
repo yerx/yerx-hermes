@@ -7,7 +7,7 @@ import json
 import os
 import sys
 import tempfile
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Mapping, Optional
 
 from agent.transports import claude_code_constants as c
 
