@@ -348,6 +348,38 @@ def _get_continuation_prompt(is_partial_stub: bool, dropped_tools: Optional[List
         )
 
 
+def _maybe_dispatch_cli_runtime(
+    agent,
+    *,
+    user_message,
+    original_user_message,
+    messages,
+    effective_task_id,
+    should_review_memory,
+):
+    """Return a turn-result dict if a CLI-owns-the-loop runtime handles this
+    turn (codex_app_server or claude_code_cli); otherwise None."""
+    if agent.api_mode == "codex_app_server":
+        return agent._run_codex_app_server_turn(
+            user_message=user_message,
+            original_user_message=original_user_message,
+            messages=messages,
+            effective_task_id=effective_task_id,
+            should_review_memory=should_review_memory,
+        )
+    if agent.api_mode == "claude_code_cli":
+        from agent.transports.claude_code_spawn import assert_trusted_context
+        assert_trusted_context(getattr(agent, "_execution_context", None))
+        return agent._run_claude_code_turn(
+            user_message=user_message,
+            original_user_message=original_user_message,
+            messages=messages,
+            effective_task_id=effective_task_id,
+            should_review_memory=should_review_memory,
+        )
+    return None
+
+
 def run_conversation(
     agent,
     user_message: str,
@@ -779,19 +811,19 @@ def run_conversation(
         except Exception:
             pass
 
-    # Optional opt-in runtime: if api_mode == codex_app_server, hand the
-    # turn to the codex app-server subprocess (terminal/file ops/patching
-    # all run inside Codex). Default Hermes path is bypassed entirely.
-    # See agent/transports/codex_app_server_session.py for the adapter
-    # and references/codex-app-server-runtime.md for the rationale.
-    if agent.api_mode == "codex_app_server":
-        return agent._run_codex_app_server_turn(
-            user_message=user_message,
-            original_user_message=original_user_message,
-            messages=messages,
-            effective_task_id=effective_task_id,
-            should_review_memory=_should_review_memory,
-        )
+    # Optional opt-in runtime: if api_mode is a CLI-owns-the-loop mode,
+    # hand the turn to that runtime's handler. Default Hermes path is
+    # bypassed entirely. Covers codex_app_server and claude_code_cli.
+    cli_runtime_result = _maybe_dispatch_cli_runtime(
+        agent,
+        user_message=user_message,
+        original_user_message=original_user_message,
+        messages=messages,
+        effective_task_id=effective_task_id,
+        should_review_memory=_should_review_memory,
+    )
+    if cli_runtime_result is not None:
+        return cli_runtime_result
 
     while (api_call_count < agent.max_iterations and agent.iteration_budget.remaining > 0) or agent._budget_grace_call:
         # Reset per-turn checkpoint dedup so each iteration can take one snapshot
