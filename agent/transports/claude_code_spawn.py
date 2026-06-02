@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import tempfile
 from typing import Any, Mapping, Optional, Sequence
 
@@ -41,3 +42,26 @@ def assert_trusted_context(context: Optional[Mapping[str, Any]]) -> None:
             "this engine is gated to trusted local-operator use (it grants "
             "Claude unsandboxed native tools under bypassPermissions)."
         )
+
+
+def build_mcp_config_file(
+    *,
+    tmp_dir: Optional[str] = None,
+    context_env: Optional[Mapping[str, str]] = None,
+) -> str:
+    """Write a temp --mcp-config JSON pointing at the hermes-tools stdio MCP
+    server, and return its path. The spawned server inherits the per-turn
+    context env so the bridge can scope tool dispatch (BL5)."""
+    server: dict[str, Any] = {
+        "command": sys.executable or "python3",
+        "args": ["-m", "agent.transports.hermes_tools_mcp_server"],
+    }
+    if context_env:
+        server["env"] = dict(context_env)
+    payload = {"mcpServers": {c.MCP_SERVER_NAME: server}}
+    fd, path = tempfile.mkstemp(
+        prefix="hermes-claude-mcp-", suffix=".json", dir=tmp_dir
+    )
+    with os.fdopen(fd, "w") as fh:
+        json.dump(payload, fh)
+    return path
