@@ -80,3 +80,37 @@ def build_spawn_env(
     if context_env:
         env.update(context_env)
     return env
+
+
+def build_claude_argv(
+    *,
+    model: str,
+    mcp_config_path: str,
+    system_prompt_path: str,
+    permission_mode: str,
+    session_id: str,
+    resume: bool,
+) -> list[str]:
+    """Build the `claude` argv for a fresh or resume turn.
+
+    systemPromptWhen=always: the system prompt file is passed on every turn
+    (helpers.ts:383). --include-partial-messages is intentionally omitted in
+    v1 (no streaming-delta consumption yet)."""
+    argv = [
+        c.CLAUDE_BIN,
+        "-p",
+        "--output-format", "stream-json",
+        "--verbose",
+        "--setting-sources", "user",
+        "--permission-mode", permission_mode,
+        "--mcp-config", mcp_config_path,
+        "--strict-mcp-config",
+        "--allowedTools", c.ALLOWED_TOOLS_GLOB,
+        "--append-system-prompt-file", system_prompt_path,
+        "--model", model,
+    ]
+    if resume:
+        argv += ["--resume", session_id]
+    else:
+        argv += ["--session-id", session_id]
+    return argv
