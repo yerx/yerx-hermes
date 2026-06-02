@@ -46,6 +46,7 @@ def run_claude_code_turn(
             "completed": False,
             "partial": True,
             "error": str(exc),
+            "claude_session_id": None,
         }
 
     if getattr(turn, "should_retire", False):

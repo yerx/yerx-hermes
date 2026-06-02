@@ -37,3 +37,34 @@ def test_nonzero_exit_marks_error_and_retire(tmp_path):
     res = sess.run_turn(user_input="hi", system_prompt="s")
     assert res.error is not None
     assert res.should_retire is True
+
+
+def test_timeout_clears_session_id(tmp_path):
+    import subprocess
+    def _run(argv, env, stdin_text, timeout=None, no_output_timeout=None):
+        raise subprocess.TimeoutExpired(cmd="claude", timeout=timeout)
+    sess = ClaudeCodeSession(cwd=str(tmp_path), spawn_fn=_run)
+    sess.session_id = "stale-1"
+    res = sess.run_turn(user_input="hi", system_prompt="s")
+    assert res.should_retire is True
+    assert sess.session_id is None
+
+
+def test_empty_output_exit_zero_is_error_and_retire(tmp_path):
+    def _run(argv, env, stdin_text, timeout=None, no_output_timeout=None):
+        return ([], 0)
+    sess = ClaudeCodeSession(cwd=str(tmp_path), spawn_fn=_run)
+    res = sess.run_turn(user_input="hi", system_prompt="s")
+    assert res.error is not None
+    assert res.should_retire is True
+
+
+def test_fresh_turns_do_not_leak_session_locks(tmp_path):
+    import agent.transports.claude_code_session as mod
+    def _run(argv, env, stdin_text, timeout=None, no_output_timeout=None):
+        return ([], 1)  # error → fresh next time, never captures a session id
+    before = len(mod._SESSION_LOCKS)
+    sess = ClaudeCodeSession(cwd=str(tmp_path), spawn_fn=_run)
+    for _ in range(5):
+        sess.run_turn(user_input="x", system_prompt="s")
+    assert len(mod._SESSION_LOCKS) == before  # no uuid orphans

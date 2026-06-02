@@ -16,7 +16,7 @@ import tempfile
 import threading
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 
 from agent.transports import claude_code_constants as c
 from agent.transports.claude_code_spawn import (
@@ -92,6 +92,7 @@ class ClaudeCodeSession:
         self._turn_timeout = turn_timeout
         self._spawn_fn = spawn_fn or _default_spawn
         self.session_id: Optional[str] = None
+        self._instance_lock = threading.Lock()
 
     def _write_system_prompt(self, text: str) -> str:
         fd, path = tempfile.mkstemp(prefix="hermes-claude-sys-", suffix=".txt")
@@ -103,7 +104,7 @@ class ClaudeCodeSession:
         result = TurnResult()
         resume = self.session_id is not None
         session_id = self.session_id or str(uuid.uuid4())
-        lock = _lock_for(session_id)
+        lock = _lock_for(self.session_id) if self.session_id else self._instance_lock
         mcp_path = sys_path = None
         with lock:
             try:
@@ -129,6 +130,7 @@ class ClaudeCodeSession:
                 except subprocess.TimeoutExpired:
                     result.error = f"claude turn timed out after {self._turn_timeout}s"
                     result.should_retire = True
+                    self.session_id = None
                     return result
                 except FileNotFoundError:
                     result.error = (
@@ -136,6 +138,7 @@ class ClaudeCodeSession:
                         "`claude` login, then retry."
                     )
                     result.should_retire = True
+                    self.session_id = None
                     return result
 
                 parsed = parse_claude_stream(lines)
@@ -148,6 +151,13 @@ class ClaudeCodeSession:
                     result.thread_id = parsed.session_id
                 if code != 0 and result.error is None:
                     result.error = f"claude exited with code {code}"
+                if (
+                    result.error is None
+                    and not parsed.final_text
+                    and not parsed.session_id
+                    and not parsed.projected_messages
+                ):
+                    result.error = "claude produced no parseable output"
                 if result.error is not None:
                     result.should_retire = True
                     self.session_id = None

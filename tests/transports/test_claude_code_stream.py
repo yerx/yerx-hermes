@@ -52,3 +52,10 @@ def test_projects_tool_use_rows():
     ))
     roles = [m["role"] for m in out.projected_messages]
     assert "assistant" in roles and "tool" in roles
+
+
+def test_parse_cap_truncation_sets_error():
+    big = '{"type":"assistant","message":{"content":[{"type":"text","text":"%s"}]}}' % ("x" * 60000)
+    lines = [big] * 25  # > 1 MB total, no result line
+    out = parse_claude_stream(lines)
+    assert out.error is not None

@@ -47,6 +47,7 @@ def parse_claude_stream(lines: Iterable[str]) -> ClaudeStreamResult:
         seen += len(raw)
         if seen > _MAX_PARSE_BYTES:
             logger.warning("claude stream exceeded parse cap; truncating")
+            res.error = "claude stream output exceeded parse cap (truncated)"
             break
         try:
             obj = json.loads(raw)
