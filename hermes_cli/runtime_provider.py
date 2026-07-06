@@ -248,6 +248,10 @@ _VALID_API_MODES = {
     # `model.openai_runtime == "codex_app_server"` AND provider in
     # {"openai", "openai-codex"}. Default is unchanged.
     "codex_app_server",
+    # Opt-in: hand the whole turn to a local `claude` subprocess (the Claude
+    # Code CLI engine). Selected via provider "claude-cli"; listed here so an
+    # explicit `model.api_mode: claude_code_cli` also validates.
+    "claude_code_cli",
 }
 
 
@@ -1221,6 +1225,22 @@ def resolve_runtime_provider(
     behavior (api_mode derived from config).
     """
     requested_provider = resolve_requested_provider(requested)
+
+    # Claude Code CLI engine short-circuit: the claude_code_cli engine hands the
+    # entire turn to a local `claude` subprocess (see agent/claude_runtime.py).
+    # It needs no HTTP endpoint or key — auth comes from the user's own `claude`
+    # login — so it must resolve before the credential-pool / openrouter-fallback
+    # path. Otherwise an empty pool diverts the request to the default provider
+    # and the engine never engages (the config-selection gap this closes).
+    if requested_provider == "claude-cli":
+        return {
+            "provider": "claude-cli",
+            "api_mode": "claude_code_cli",
+            "base_url": "",
+            "api_key": "",
+            "source": "claude-cli",
+            "requested_provider": requested_provider,
+        }
 
     # Azure Anthropic short-circuit: when explicitly targeting an Azure endpoint
     # with provider="anthropic", bypass _resolve_named_custom_runtime (which would

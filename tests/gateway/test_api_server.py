@@ -339,6 +339,66 @@ class TestAdapterInit:
 
 
 # ---------------------------------------------------------------------------
+# Trusted-local override for the claude_code_cli engine
+# ---------------------------------------------------------------------------
+
+
+class TestTrustedLocalOverride:
+    """The claude_code_cli engine's trust gate refuses non-"cli" platforms
+    (api_server is one). When the operator opts in via HERMES_API_TRUSTED_LOCAL
+    AND the server is bound to loopback, _create_agent marks the agent as a
+    trusted local operator so a Hearth-Bridge-driven turn is allowed. Off by
+    default; never applied on a network-accessible bind; only overrides the
+    derived channel/gateway `source`, never the `delegated` refusal."""
+
+    def _adapter_with(self, monkeypatch, *, host="127.0.0.1"):
+        captured = {}
+
+        class FakeAgent:
+            def __init__(self, **kwargs):
+                captured.update(kwargs)
+
+        monkeypatch.setattr("run_agent.AIAgent", FakeAgent)
+        monkeypatch.setattr(
+            "gateway.run._resolve_runtime_agent_kwargs",
+            lambda: {"provider": "claude-cli", "api_mode": "claude_code_cli"},
+        )
+        monkeypatch.setattr("gateway.run._resolve_gateway_model", lambda: "claude-opus-4-8")
+        monkeypatch.setattr("gateway.run._load_gateway_config", lambda: {})
+        monkeypatch.setattr(
+            "gateway.run.GatewayRunner._load_reasoning_config",
+            staticmethod(lambda: {}),
+        )
+        monkeypatch.setattr(
+            "gateway.run.GatewayRunner._load_fallback_model", staticmethod(lambda: None)
+        )
+        monkeypatch.setattr("hermes_cli.tools_config._get_platform_tools", lambda *_: set())
+        adapter = APIServerAdapter(
+            PlatformConfig(enabled=True, extra={"key": "sk-test123", "host": host})
+        )
+        monkeypatch.setattr(adapter, "_ensure_session_db", lambda: None)
+        return adapter
+
+    def test_off_by_default_no_override(self, monkeypatch):
+        monkeypatch.delenv("HERMES_API_TRUSTED_LOCAL", raising=False)
+        adapter = self._adapter_with(monkeypatch)
+        agent = adapter._create_agent(session_id="s")
+        assert getattr(agent, "_execution_context", None) is None
+
+    def test_loopback_plus_flag_marks_trusted_local(self, monkeypatch):
+        monkeypatch.setenv("HERMES_API_TRUSTED_LOCAL", "1")
+        adapter = self._adapter_with(monkeypatch, host="127.0.0.1")
+        agent = adapter._create_agent(session_id="s")
+        assert agent._execution_context == {"source": "local"}
+
+    def test_flag_without_loopback_does_not_override(self, monkeypatch):
+        monkeypatch.setenv("HERMES_API_TRUSTED_LOCAL", "1")
+        adapter = self._adapter_with(monkeypatch, host="0.0.0.0")
+        agent = adapter._create_agent(session_id="s")
+        assert getattr(agent, "_execution_context", None) is None
+
+
+# ---------------------------------------------------------------------------
 # Auth checking
 # ---------------------------------------------------------------------------
 

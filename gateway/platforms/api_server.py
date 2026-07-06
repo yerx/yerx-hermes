@@ -1014,7 +1014,29 @@ class APIServerAdapter(BasePlatformAdapter):
             reasoning_config=reasoning_config,
             gateway_session_key=gateway_session_key,
         )
+        if self._trusted_local_enabled():
+            # The claude_code_cli engine's trust gate (BL6) refuses any non-"cli"
+            # platform — and this server's platform is "api_server" — because that
+            # engine grants Claude unsandboxed native tools under bypassPermissions.
+            # But the Hearth Bridge on the user's own Mac mini IS the trusted local
+            # operator the gate exists to protect. Opt-in only (HERMES_API_TRUSTED_LOCAL
+            # + a loopback bind, both checked in _trusted_local_enabled), we override
+            # the gate's *derived* channel/gateway `source` via its designed
+            # `_execution_context` merge hook. We set only `source`: a genuinely
+            # delegated turn still carries `delegated=True` and is still refused.
+            agent._execution_context = {"source": "local"}
         return agent
+
+    def _trusted_local_enabled(self) -> bool:
+        """True when the operator has opted into trusted-local mode
+        (HERMES_API_TRUSTED_LOCAL) AND this server is bound to a loopback
+        address. Both are required: the flag alone must never trust a
+        network-accessible bind. Reuses is_network_accessible() so the
+        loopback classification matches the startup bind guard exactly."""
+        flag = os.getenv("HERMES_API_TRUSTED_LOCAL", "").strip().lower()
+        if flag not in ("1", "true", "yes", "on"):
+            return False
+        return not is_network_accessible(self._host)
 
     # ------------------------------------------------------------------
     # HTTP Handlers

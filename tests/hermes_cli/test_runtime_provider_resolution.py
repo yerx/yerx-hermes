@@ -150,6 +150,24 @@ def test_resolve_runtime_provider_codex(monkeypatch):
     assert resolved["requested_provider"] == "openai-codex"
 
 
+def test_resolve_runtime_provider_claude_cli(monkeypatch):
+    """provider=claude-cli selects the claude_code_cli engine (a local `claude`
+    subprocess). It needs no api_key/base_url — auth comes from the user's own
+    `claude` login — and must not fall through to chat_completions."""
+    monkeypatch.setattr(rp, "resolve_provider", lambda *a, **k: "claude-cli")
+    monkeypatch.setattr(
+        rp,
+        "load_pool",
+        lambda provider: type("P", (), {"has_credentials": lambda self: False})(),
+    )
+
+    resolved = rp.resolve_runtime_provider(requested="claude-cli")
+
+    assert resolved["provider"] == "claude-cli"
+    assert resolved["api_mode"] == "claude_code_cli"
+    assert resolved["requested_provider"] == "claude-cli"
+
+
 def test_resolve_runtime_provider_qwen_oauth(monkeypatch):
     monkeypatch.setattr(rp, "resolve_provider", lambda *a, **k: "qwen-oauth")
     monkeypatch.setattr(
