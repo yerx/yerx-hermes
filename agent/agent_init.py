@@ -686,6 +686,20 @@ def init_agent(
         if not agent.quiet_mode:
             _gr_label = " + Guardrails" if agent._bedrock_guardrail_config else ""
             print(f"🤖 AI Agent initialized with model: {agent.model} (AWS Bedrock, {agent._bedrock_region}{_gr_label})")
+    elif agent.api_mode == "claude_code_cli":
+        # The Claude Code CLI engine hands the entire turn to a local `claude`
+        # subprocess (agent/claude_runtime.py, dispatched in conversation_loop
+        # via _maybe_dispatch_cli_runtime). No LLM HTTP client is constructed:
+        # auth is the user's own `claude` login and the engine needs no provider
+        # key or base_url. Unlike codex_app_server — whose OpenAI/Codex provider
+        # always resolves a client that the dispatch then bypasses — claude-cli
+        # has no credentials to resolve, so it must skip the client-build path
+        # entirely rather than fail the no-key guard below.
+        agent.api_key = ""
+        agent.client = None
+        agent._client_kwargs = {}
+        if not agent.quiet_mode:
+            print(f"🤖 AI Agent initialized with model: {agent.model} (Claude Code CLI engine)")
     else:
         if api_key and base_url:
             # Explicit credentials from CLI/gateway — construct directly.
